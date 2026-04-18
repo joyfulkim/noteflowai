@@ -30,7 +30,7 @@
       --sheet-page-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
       --sheet-page-pad-x: clamp(12px, 2.6vw, 26px);
       --sheet-page-pad-y: clamp(24px, 4.4vw, 42px);
-      --sheet-system-gap: clamp(48px, 8vw, 78px);
+      --sheet-system-gap: clamp(10px, 1.5vw, 16px);
     }
 
     /* Grain overlay */
@@ -291,18 +291,36 @@
         </div>
       </div>
 
+      <!-- Lyrics input card -->
+      <div class="glass rounded-2xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <iconify-icon icon="solar:pen-bold" class="text-emerald-400" style="font-size:16px"></iconify-icon>
+          <h2 class="font-semibold text-sm text-zinc-300">가사 입력</h2>
+          <span class="ml-auto text-xs text-zinc-500 break-keep">음표 아래에 표시됩니다</span>
+        </div>
+        <textarea id="lyrics-input"
+          placeholder="가사를 입력하면 악보 음표 아래에 표시됩니다..."
+          class="w-full bg-zinc-900/60 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 resize-none focus:outline-none focus:border-emerald-500/50 transition-colors"
+          rows="3"
+          oninput="updateLyricsFromInput()"></textarea>
+        <div class="flex items-center gap-2 mt-3">
+          <span class="text-xs text-zinc-500 break-keep">시작 위치</span>
+          <button onclick="adjustLyricsOffset(-1)"
+                  class="w-7 h-7 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors text-sm font-bold">←</button>
+          <span id="lyrics-offset-display"
+                class="text-sm font-semibold text-emerald-400 min-w-[2ch] text-center">0</span>
+          <button onclick="adjustLyricsOffset(1)"
+                  class="w-7 h-7 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors text-sm font-bold">→</button>
+          <span class="text-xs text-zinc-600 break-keep">번째 음표부터</span>
+        </div>
+      </div>
+
       <!-- Chord progression card -->
       <div class="glass rounded-2xl p-5">
         <div class="flex items-center gap-2 mb-4">
           <iconify-icon icon="solar:music-notes-bold" class="text-emerald-400" style="font-size:16px"></iconify-icon>
           <h2 class="font-semibold text-sm text-zinc-300">코드 진행</h2>
           <span id="res-chord-count" class="ml-auto px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400 text-xs"></span>
-        </div>
-        <div id="lyrics-summary" class="mb-4 rounded-xl border border-zinc-700/70 bg-zinc-900/40 px-4 py-3">
-          <p class="text-xs font-semibold tracking-tight text-emerald-400 mb-1.5 break-keep">인식 가사</p>
-          <p id="lyrics-text" class="text-sm leading-relaxed text-zinc-300 break-keep">
-            가사를 인식하는 중입니다...
-          </p>
         </div>
         <div id="chord-display" class="flex flex-wrap gap-2.5"></div>
       </div>
@@ -334,11 +352,11 @@
   // ─────────────────────────────────────────────
   // STATE
   // ─────────────────────────────────────────────
-  let abcText = '', abcBase = '', lyricsText = '';
-  let lyricsResult = null;
-  let lyricsAsrPromise = null, lyricsAsrModelName = '';
+  let abcText = '', abcBase = '';
+  let lastNotes = [], lastBpm = 120, lastChords = [], lastTitle = '';
+  let lyricsOffset = 0;
   const SHEET_MEASURE_UNITS = 16;
-  const SHEET_PREVIEW_MEASURES = 16;
+  const SHEET_PREVIEW_MEASURES = 150;
   const SHEET_PREVIEW_GRID = SHEET_MEASURE_UNITS * SHEET_PREVIEW_MEASURES;
   const SHEET_PAGE = Object.freeze({
     widthPx: 794,
@@ -381,37 +399,25 @@
       ctx.close();
 
       const SR_TARGET = 11025;
-      const SR_LYRICS = 16000;
       const mono = mixToMono(decoded);
-      const vocalFocus = extractVocalFocus(decoded);
       const data = downsample(mono, decoded.sampleRate, SR_TARGET);
-      const lyricsData = downsample(vocalFocus, decoded.sampleRate, SR_LYRICS);
       const duration = decoded.duration;
 
       setProgress(25, '음정 분석 중...', `${duration.toFixed(1)}초 분량 처리 중`);
       const { notes, bpm } = await analyzePitch(data, SR_TARGET, duration);
 
-      setProgress(68, '화음 감지 중...', '코드 진행을 추출하고 있습니다');
+      setProgress(75, '화음 감지 중...', '코드 진행을 추출하고 있습니다');
       const chords = await analyzeChords(data, SR_TARGET);
 
-      setProgress(78, '가사 인식 중...', '한국어 가사를 텍스트로 변환 중');
-      let lyrics = { text: '', chunks: [], syllables: [] };
-      try {
-        lyrics = await analyzeLyrics(lyricsData, SR_LYRICS);
-      } catch (lyricsErr) {
-        console.warn('가사 인식 실패:', lyricsErr);
-      }
-
-      setProgress(88, '악보 생성 중...', 'ABC 표기법으로 변환 중');
+      setProgress(90, '악보 생성 중...', 'ABC 표기법으로 변환 중');
       const key = detectKey(data, SR_TARGET);
-      abcBase = generateABC(notes, bpm, chords, file.name, lyrics);
+      lastNotes = notes; lastBpm = bpm; lastChords = chords; lastTitle = file.name;
+      abcBase = generateABC(notes, bpm, chords, file.name, { text: '', chunks: [], syllables: [] });
       abcText = abcBase;
-      lyricsResult = lyrics;
-      lyricsText = lyrics.text || '';
 
       setProgress(100, '분석 완료!', '결과를 표시합니다');
       await sleep(400);
-      showResults(notes, chords, bpm, duration, key, file.name, lyricsText);
+      showResults(notes, chords, bpm, duration, key, file.name);
     } catch (err) {
       console.error(err);
       alert('분석 오류: ' + err.message);
@@ -471,36 +477,6 @@
     const gain = peak / maxAbs;
     for (let i = 0; i < data.length; i++) data[i] *= gain;
     return data;
-  }
-
-  function extractVocalFocus(ab) {
-    const len = ab.length;
-    const nch = ab.numberOfChannels;
-    if (nch < 2) {
-      const mono = mixToMono(ab);
-      return lowPassIIRInPlace(highPassIIR(mono, ab.sampleRate, 130), ab.sampleRate, 4200);
-    }
-
-    const left = ab.getChannelData(0);
-    const right = ab.getChannelData(1);
-    const out = new Float32Array(len);
-
-    // Simple center-channel emphasis:
-    // vocals are usually mixed near the center, while wide stereo content
-    // (pads, reverbs, guitars) is attenuated using the side signal.
-    for (let i = 0; i < len; i++) {
-      const mid = (left[i] + right[i]) * 0.5;
-      const side = (left[i] - right[i]) * 0.5;
-      const sideLevel = Math.abs(side);
-      const midLevel = Math.abs(mid);
-      let sample = mid - side * 0.18;
-      if (sideLevel > midLevel * 0.9) sample *= 0.55;
-      out[i] = sample;
-    }
-
-    const filtered = highPassIIR(out, ab.sampleRate, 130);
-    lowPassIIRInPlace(filtered, ab.sampleRate, 4200);
-    return normalizeAudioInPlace(filtered);
   }
 
   function downsample(data, fromSR, toSR) {
@@ -733,229 +709,9 @@
     for (const c of raw) {
       if (!prev || prev.chord !== c.chord) { dedup.push(c); prev = c; }
     }
-    return dedup.slice(0, 48);
+    return dedup;
   }
 
-  async function getLyricsRecognizer() {
-    if (!lyricsAsrPromise) {
-      lyricsAsrPromise = (async () => {
-        const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
-        env.allowLocalModels = false;
-        env.useBrowserCache = true;
-        const candidates = [
-          'onnx-community/whisper-base_timestamped',
-          'onnx-community/whisper-tiny_timestamped',
-          'Xenova/whisper-base',
-          'Xenova/whisper-tiny',
-        ];
-        let lastErr = null;
-        for (const modelName of candidates) {
-          try {
-            const asr = await pipeline('automatic-speech-recognition', modelName);
-            lyricsAsrModelName = modelName;
-            return asr;
-          } catch (err) {
-            lastErr = err;
-          }
-        }
-        throw lastErr || new Error('ASR model load failed');
-      })();
-    }
-    return lyricsAsrPromise;
-  }
-
-  function getFrameRms(data, frame) {
-    const rms = [];
-    for (let i = 0; i < data.length; i += frame) {
-      const end = Math.min(i + frame, data.length);
-      let s = 0;
-      for (let j = i; j < end; j++) s += data[j] * data[j];
-      rms.push(Math.sqrt(s / Math.max(1, end - i)));
-    }
-    return rms;
-  }
-
-  function estimateNoiseFloor(rms) {
-    if (!rms.length) return 0.0025;
-    const sorted = [...rms].sort((a, b) => a - b);
-    const q1 = sorted[Math.floor(sorted.length * 0.25)] || 0;
-    const median = sorted[Math.floor(sorted.length * 0.5)] || 0;
-    return Math.max(0.0018, q1 + (median - q1) * 0.35);
-  }
-
-  function trimSilenceWindow(data, sr) {
-    const frame = Math.max(1, Math.floor(sr * 0.02));
-    const rms = getFrameRms(data, frame);
-    const floor = estimateNoiseFloor(rms);
-    const threshold = Math.max(0.0042, floor * 2.2);
-
-    let startFrame = 0;
-    while (startFrame < rms.length && rms[startFrame] < threshold) startFrame++;
-    let endFrame = rms.length - 1;
-    while (endFrame >= 0 && rms[endFrame] < threshold) endFrame--;
-
-    if (startFrame >= endFrame) return data;
-
-    const pad = Math.floor(0.35 / 0.02);
-    const a = Math.max(0, startFrame - pad) * frame;
-    const b = Math.min(data.length, (endFrame + pad + 1) * frame);
-    return data.subarray(a, b);
-  }
-
-  function enhanceLyricsAudio(data) {
-    const out = new Float32Array(data.length);
-    let prev = 0;
-    let maxAbs = 1e-6;
-
-    for (let i = 0; i < data.length; i++) {
-      // Pre-emphasis to sharpen consonants for Korean lyrics.
-      let y = data[i] - 0.97 * prev;
-      prev = data[i];
-      // Soft compression stabilizes level differences.
-      y = Math.tanh(y * 1.85);
-      out[i] = y;
-      const a = Math.abs(y);
-      if (a > maxAbs) maxAbs = a;
-    }
-
-    const norm = 0.96 / maxAbs;
-    for (let i = 0; i < out.length; i++) out[i] *= norm;
-    return out;
-  }
-
-  function cleanLyricsText(raw) {
-    const t = (raw || '')
-      .replace(/\[[^\]]*\]/g, ' ')
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/[♪♫]/g, ' ')
-      .replace(/[^\s가-힣A-Za-z0-9.,!?]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (!t) return '';
-
-    const words = t.split(/\s+/);
-    const compact = [];
-    let prev = '';
-    for (const w of words) {
-      if (w === prev) continue;
-      prev = w;
-      // Keep Korean words and meaningful latin words only.
-      if (!/[가-힣]/.test(w) && w.length < 3) continue;
-      compact.push(w);
-    }
-    const finalText = compact.join(' ').trim();
-    const hangulCount = (finalText.match(/[가-힣]/g) || []).length;
-    return hangulCount >= 4 ? finalText : '';
-  }
-
-  function cleanLyricsChunkText(raw) {
-    const cleaned = String(raw || '')
-      .replace(/[^\s가-힣0-9]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    return cleaned;
-  }
-
-  function normalizeTimestampRange(timestamp, fallbackStart = 0) {
-    if (Array.isArray(timestamp) && timestamp.length >= 2) {
-      const start = Number(timestamp[0]);
-      const end = Number(timestamp[1]);
-      if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
-        return [start, end];
-      }
-    }
-    return [fallbackStart, fallbackStart + 0.18];
-  }
-
-  function buildTimedLyricSyllables(chunks, fallbackText = '') {
-    const syllables = [];
-    let cursor = 0;
-
-    for (const chunk of chunks || []) {
-      const cleaned = cleanLyricsChunkText(chunk?.text);
-      const chars = getLyricSyllables(cleaned);
-      if (!chars.length) continue;
-
-      let [start, end] = normalizeTimestampRange(chunk?.timestamp, cursor);
-      if (start < cursor) start = cursor;
-      if (end <= start) end = start + 0.18;
-
-      const span = Math.max(0.18, end - start);
-      for (let i = 0; i < chars.length; i++) {
-        const a = start + (span * i / chars.length);
-        const b = start + (span * (i + 1) / chars.length);
-        syllables.push({ text: chars[i], start: a, end: b });
-      }
-      cursor = end;
-    }
-
-    if (syllables.length) return syllables;
-
-    const fallback = getLyricSyllables(fallbackText);
-    return fallback.map((text, index) => ({
-      text,
-      start: index * 0.22,
-      end: index * 0.22 + 0.18,
-    }));
-  }
-
-  function chunkLyricsLines(text, maxLen = 24) {
-    const words = text.split(/\s+/).filter(Boolean);
-    if (!words.length) return '';
-    const lines = [];
-    let line = '';
-    for (const w of words) {
-      const next = line ? `${line} ${w}` : w;
-      if (next.length > maxLen && line) {
-        lines.push(line);
-        line = w;
-      } else {
-        line = next;
-      }
-    }
-    if (line) lines.push(line);
-    return lines.join('\n');
-  }
-
-  async function analyzeLyrics(data, sr) {
-    if (!data || data.length < sr * 6) return { text: '', chunks: [], syllables: [] };
-
-    // Cap audio length for responsiveness in browser-only execution.
-    const maxSec = 120;
-    const cap = Math.min(data.length, sr * maxSec);
-    const rawAudio = data.subarray(0, cap);
-    const trimmed = trimSilenceWindow(rawAudio, sr);
-    const audio = enhanceLyricsAudio(trimmed);
-
-    const asr = await getLyricsRecognizer();
-    const canUseWordTimestamps = lyricsAsrModelName.includes('_timestamped');
-    const out = await asr(audio, {
-      sampling_rate: sr,
-      chunk_length_s: 30,
-      stride_length_s: 5,
-      task: 'transcribe',
-      language: 'korean',
-      return_timestamps: canUseWordTimestamps ? 'word' : false,
-      temperature: 0,
-    });
-
-    const cleaned = cleanLyricsText(out?.text || '');
-    const chunks = Array.isArray(out?.chunks)
-      ? out.chunks
-          .map(chunk => ({
-            text: cleanLyricsChunkText(chunk?.text),
-            timestamp: chunk?.timestamp,
-          }))
-          .filter(chunk => chunk.text)
-      : [];
-    const syllables = buildTimedLyricSyllables(chunks, cleaned);
-
-    return {
-      text: cleaned ? chunkLyricsLines(cleaned) : '',
-      chunks,
-      syllables,
-    };
-  }
 
   // ─────────────────────────────────────────────
   // KEY DETECTION (Krumhansl-Schmuckler simplified)
@@ -1043,7 +799,7 @@
     return aligned;
   }
 
-  function generateABC(notes, bpm, chords, title, lyrics) {
+  function generateABC(notes, bpm, chords, title, lyrics, offset = 0) {
     const safeTitle = (title || '분석된 멜로디').replace(/\.[^.]+$/, '');
     const MEAS = SHEET_MEASURE_UNITS;
     const targetGrid = SHEET_PREVIEW_GRID;
@@ -1058,7 +814,7 @@
       : null;
     let lyricIndex = 0;
     let noteIndex = 0;
-    const header = ['X:1',`T:${safeTitle}`,'M:4/4','L:1/16',`Q:1/4=${bpm}`,'%%barsperline 4','%%staffsep 86','%%systemsep 110','%%stretchlast 1','%%leftmargin 0mm','%%rightmargin 0mm'];
+    const header = ['X:1',`T:${safeTitle}`,'M:4/4','L:1/16',`Q:1/4=${bpm}`,'%%barsperline 4','%%staffsep 86','%%systemsep 30','%%stretchlast 1','%%leftmargin 0mm','%%rightmargin 0mm'];
     if (lyricSyllables.length) header.push('%%vocalspace 15pt');
     header.push('K:C');
 
@@ -1133,7 +889,7 @@
       const noteDur = Math.max(1, Math.min(n.dur, targetGrid - noteStart));
       const syllable = alignedLyrics
         ? (alignedLyrics[noteIndex] || '*')
-        : (lyricIndex < lyricSyllables.length ? lyricSyllables[lyricIndex++] : '*');
+        : (noteIndex >= offset && lyricIndex < lyricSyllables.length ? lyricSyllables[lyricIndex++] : '*');
       putToken(midiToABC(n.midi), noteDur, prefix, syllable, syllable === '*' ? '*' : '_');
       prevEnd = noteStart + noteDur;
       noteIndex++;
@@ -1141,9 +897,16 @@
     if (prevEnd < targetGrid) putToken('z', targetGrid - prevEnd, '', '*', '*');
     if (beat > 0) putToken('z', MEAS - beat, '', '*', '*');
 
+    const hasNotes = m => /[a-gA-G]/.test(m.music);
+
+    // 뒤쪽 빈 마디 제거
+    while (measures.length && !hasNotes(measures[measures.length - 1])) measures.pop();
+
     const lines = [];
     for (let i = 0; i < measures.length; i += 4) {
       const chunk = measures.slice(i, i + 4);
+      // 줄 전체가 음표 없이 쉼표만이면 건너뜀
+      if (!chunk.some(hasNotes)) continue;
       lines.push(chunk.map(measure => measure.music).join('|') + '|');
       const hasVisibleLyrics = chunk.some(measure => measure.lyrics.some(token => token !== '*'));
       if (lyricSyllables.length && hasVisibleLyrics) {
@@ -1170,7 +933,7 @@
     document.getElementById('prog-ring').setAttribute('stroke-dashoffset', circ * (1 - pct/100));
   }
 
-  function showResults(notes, chords, bpm, duration, key, name, lyrics) {
+  function showResults(notes, chords, bpm, duration, key, name) {
     setView('results');
     const m = Math.floor(duration / 60), s = Math.floor(duration % 60);
     document.getElementById('res-filename').textContent = name;
@@ -1181,8 +944,10 @@
     document.getElementById('stat-chords').textContent   = chords.length;
     document.getElementById('stat-duration').textContent = m > 0 ? `${m}m${s}s` : `${s}s`;
     document.getElementById('res-chord-count').textContent = `${chords.length}개 코드`;
+    document.getElementById('lyrics-input').value = '';
+    lyricsOffset = 0;
+    document.getElementById('lyrics-offset-display').textContent = '0';
     renderSheet();
-    renderLyrics(lyrics);
     renderChords(chords);
   }
 
@@ -1210,7 +975,7 @@
       print: true,
       minPadding: 0.2,
       scale: 1.0,
-      stafftopmargin: 18,
+      stafftopmargin: 9,
       lineThickness: 0.2,
       paddingtop: 0, paddingbottom: 0, paddingright: 0, paddingleft: 0,
       add_classes: true,
@@ -1338,14 +1103,16 @@
       .replaceAll("'", '&#39;');
   }
 
-  function renderLyrics(lyrics) {
-    const el = document.getElementById('lyrics-text');
-    if (!el) return;
-    if (!lyrics) {
-      el.innerHTML = '<span class="text-zinc-500">가사를 뚜렷하게 인식하지 못했습니다. 발음이 선명한 구간의 음원으로 다시 시도해보세요.</span>';
-      return;
-    }
-    el.innerHTML = escapeHtml(lyrics).replace(/\n/g, '<br>');
+  function updateLyricsFromInput() {
+    const input = document.getElementById('lyrics-input').value;
+    abcText = generateABC(lastNotes, lastBpm, lastChords, lastTitle, { text: input, chunks: [], syllables: [] }, lyricsOffset);
+    renderSheet();
+  }
+
+  function adjustLyricsOffset(delta) {
+    lyricsOffset = Math.max(0, lyricsOffset + delta);
+    document.getElementById('lyrics-offset-display').textContent = lyricsOffset;
+    updateLyricsFromInput();
   }
 
   function renderChords(chords) {
@@ -1409,9 +1176,11 @@
   function resetApp() {
     setView('upload');
     document.getElementById('file-input').value = '';
+    document.getElementById('lyrics-input').value = '';
+    lyricsOffset = 0;
+    document.getElementById('lyrics-offset-display').textContent = '0';
     abcText = '';
-    lyricsText = '';
-    lyricsResult = null;
+    lastNotes = []; lastBpm = 120; lastChords = []; lastTitle = '';
   }
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
