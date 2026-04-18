@@ -242,11 +242,17 @@
             <p id="res-info"     class="text-xs text-zinc-500">분석 완료</p>
           </div>
         </div>
-        <button onclick="resetApp()"
-                class="flex items-center gap-1.5 px-4 py-2 rounded-full glass text-zinc-400 hover:text-zinc-200 text-xs transition-colors">
-          <iconify-icon icon="solar:restart-bold" style="font-size:13px"></iconify-icon>
-          다시 분석
-        </button>
+        <div class="flex items-center gap-2">
+          <button id="play-btn" onclick="togglePlay()"
+                  class="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 transition-all duration-200 hover:scale-105 active:scale-95">
+            <iconify-icon id="play-icon" icon="solar:play-bold" style="font-size:16px"></iconify-icon>
+          </button>
+          <button onclick="resetApp()"
+                  class="flex items-center gap-1.5 px-4 py-2 rounded-full glass text-zinc-400 hover:text-zinc-200 text-xs transition-colors">
+            <iconify-icon icon="solar:restart-bold" style="font-size:13px"></iconify-icon>
+            다시 분석
+          </button>
+        </div>
       </div>
 
       <!-- Sheet music card -->
@@ -355,6 +361,7 @@
   let abcText = '', abcBase = '';
   let lastNotes = [], lastBpm = 120, lastChords = [], lastTitle = '';
   let lyricsOffset = 0;
+  let audioPlayer = null, audioUrl = '';
   const SHEET_MEASURE_UNITS = 16;
   const SHEET_PREVIEW_MEASURES = 150;
   const SHEET_PREVIEW_GRID = SHEET_MEASURE_UNITS * SHEET_PREVIEW_MEASURES;
@@ -390,6 +397,10 @@
     setView('progress');
     document.getElementById('res-filename').textContent = file.name;
     try {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      audioUrl = URL.createObjectURL(file);
+      audioPlayer = new Audio(audioUrl);
+      audioPlayer.addEventListener('ended', () => setPlayIcon('play'));
       setProgress(5, '파일 읽는 중...', '오디오 데이터를 불러오고 있습니다');
       const buf = await file.arrayBuffer();
 
@@ -1103,6 +1114,22 @@
       .replaceAll("'", '&#39;');
   }
 
+  function setPlayIcon(state) {
+    const icon = document.getElementById('play-icon');
+    if (icon) icon.setAttribute('icon', state === 'play' ? 'solar:play-bold' : 'solar:pause-bold');
+  }
+
+  function togglePlay() {
+    if (!audioPlayer) return;
+    if (audioPlayer.paused) {
+      audioPlayer.play();
+      setPlayIcon('pause');
+    } else {
+      audioPlayer.pause();
+      setPlayIcon('play');
+    }
+  }
+
   function updateLyricsFromInput() {
     const input = document.getElementById('lyrics-input').value;
     abcText = generateABC(lastNotes, lastBpm, lastChords, lastTitle, { text: input, chunks: [], syllables: [] }, lyricsOffset);
@@ -1179,6 +1206,9 @@
     document.getElementById('lyrics-input').value = '';
     lyricsOffset = 0;
     document.getElementById('lyrics-offset-display').textContent = '0';
+    if (audioPlayer) { audioPlayer.pause(); audioPlayer = null; }
+    if (audioUrl) { URL.revokeObjectURL(audioUrl); audioUrl = ''; }
+    setPlayIcon('play');
     abcText = '';
     lastNotes = []; lastBpm = 120; lastChords = []; lastTitle = '';
   }
