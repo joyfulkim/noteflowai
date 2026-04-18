@@ -967,7 +967,7 @@
     // staffwidth = usableWidth; ABCjs overhead (clef etc.) is handled via %%leftmargin/rightmargin 0mm in ABC header.
     const staffWidth = Math.max(200, usableWidth);
     // Adapt bars per line: narrower screens get fewer bars so notes stay readable.
-    const barsPerLine = usableWidth >= 800 ? 4 : usableWidth >= 520 ? 3 : 2;
+    const barsPerLine = usableWidth >= 480 ? 4 : 2;
     const abc = abcText.replace(/%%barsperline \d+/, `%%barsperline ${barsPerLine}`);
     ABCJS.renderAbc('sheet-music', abc, {
       staffwidth: staffWidth,
