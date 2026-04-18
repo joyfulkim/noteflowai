@@ -937,7 +937,6 @@
     lyricsOffset = 0;
     document.getElementById('lyrics-offset-display').textContent = '0';
     renderSheet();
-    renderChords(chords);
   }
 
   let _sheetResizeObserver = null;
@@ -1077,11 +1076,6 @@
     return name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]+/g, '_') || 'melody';
   }
 
-  const CHORD_COLORS = {
-    major: { bg:'rgba(52,211,153,0.08)', border:'rgba(52,211,153,0.25)', text:'#34d399' },
-    minor: { bg:'rgba(148,163,184,0.08)', border:'rgba(148,163,184,0.2)', text:'#94a3b8'  },
-    dom7:  { bg:'rgba(251,191,36,0.08)',  border:'rgba(251,191,36,0.25)',  text:'#fbbf24'  },
-  };
 
   function escapeHtml(text) {
     return String(text)
@@ -1120,33 +1114,6 @@
     updateLyricsFromInput();
   }
 
-  function renderChords(chords) {
-    const el = document.getElementById('chord-display');
-    if (!chords.length) {
-      el.innerHTML = '<p class="text-zinc-600 text-sm break-keep">코드를 감지하지 못했습니다. 화음이 있는 음악으로 다시 시도해보세요.</p>';
-      return;
-    }
-    el.innerHTML = chords.map((c, i) => {
-      const type = c.chord.includes('7') ? 'dom7' : c.chord.includes('m') ? 'minor' : 'major';
-      const col = CHORD_COLORS[type];
-      const mins = Math.floor(c.t / 60), secs = Math.floor(c.t % 60);
-      const ts = `${mins}:${String(secs).padStart(2,'0')}`;
-      return `<div class="chord-chip rounded-xl px-4 py-3 cursor-default"
-               style="background:${col.bg}; border:1px solid ${col.border}; animation:fadeInUp 0.4s ${i*30}ms both">
-        <div class="text-lg font-bold leading-none" style="color:${col.text}">${c.chord}</div>
-        <div class="text-xs text-zinc-600 mt-1">${ts}</div>
-      </div>`;
-    }).join('');
-  }
-
-  function copyABC() {
-    navigator.clipboard.writeText(abcText).then(() => {
-      const btn = document.getElementById('copy-btn');
-      const orig = btn.innerHTML;
-      btn.innerHTML = '<iconify-icon icon="solar:check-circle-bold" style="font-size:13px" class="text-emerald-400"></iconify-icon><span class="text-emerald-400 ml-1.5">복사됨!</span>';
-      setTimeout(() => btn.innerHTML = orig, 1800);
-    });
-  }
 
   async function exportSheet(format) {
     const canvases = await renderSheetCanvases();
