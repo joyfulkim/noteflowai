@@ -842,6 +842,7 @@
     let beat = 0, prevEnd = 0, lastAnnotated = null;
     let currentMeasureMusic = '';
     let currentMeasureLyrics = [];
+    let lastAssignedBeat = -1; // 박자 단위 가사 배치용
     const measures = [];
 
     function flushMeasure() {
@@ -881,9 +882,17 @@
         lastAnnotated = chord;
       }
       const noteDur = Math.max(1, Math.min(n.dur, targetGrid - noteStart));
-      const syllable = alignedLyrics
-        ? (alignedLyrics[noteIndex] || '*')
-        : (noteIndex >= offset && lyricIndex < lyricSyllables.length ? lyricSyllables[lyricIndex++] : '*');
+      const beatIndex = Math.floor(noteStart / 4);
+      const isNewBeat = beatIndex > lastAssignedBeat;
+      let syllable;
+      if (alignedLyrics) {
+        syllable = alignedLyrics[noteIndex] || '*';
+      } else if (isNewBeat && noteIndex >= offset && lyricIndex < lyricSyllables.length) {
+        syllable = lyricSyllables[lyricIndex++];
+        lastAssignedBeat = beatIndex;
+      } else {
+        syllable = '*';
+      }
       putToken(midiToABC(n.midi), noteDur, prefix, syllable, syllable === '*' ? '*' : '_');
       prevEnd = noteStart + noteDur;
       noteIndex++;
