@@ -294,10 +294,9 @@
           <span class="ml-auto text-xs text-zinc-500 break-keep">음표 아래에 표시됩니다</span>
         </div>
         <textarea id="lyrics-input"
-          placeholder="가사를 입력하면 악보 음표 아래에 표시됩니다..."
+          placeholder="가사를 입력하고 저장 버튼을 누르면 악보에 표시됩니다..."
           class="w-full bg-zinc-900/60 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 resize-none focus:outline-none focus:border-emerald-500/50 transition-colors"
-          rows="3"
-          oninput="updateLyricsFromInput()"></textarea>
+          rows="3"></textarea>
         <div class="flex items-center gap-2 mt-3">
           <span class="text-xs text-zinc-500 break-keep">시작 위치</span>
           <button onclick="adjustLyricsOffset(-1)"
@@ -307,6 +306,11 @@
           <button onclick="adjustLyricsOffset(1)"
                   class="w-7 h-7 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors text-sm font-bold">→</button>
           <span class="text-xs text-zinc-600 break-keep">번째 음표부터</span>
+          <button onclick="updateLyricsFromInput()"
+                  class="ml-auto flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-xs transition-all hover:scale-105 active:scale-95">
+            <iconify-icon icon="solar:check-circle-bold" style="font-size:13px"></iconify-icon>
+            저장
+          </button>
         </div>
       </div>
 
