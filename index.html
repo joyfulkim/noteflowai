@@ -804,7 +804,7 @@
       : null;
     let lyricIndex = 0;
     let noteIndex = 0;
-    const header = ['X:1',`T:${safeTitle}`,'M:4/4','L:1/16',`Q:1/4=${bpm}`,'%%barsperline 4','%%staffsep 86','%%systemsep 30','%%stretchlast 1','%%leftmargin 0mm','%%rightmargin 0mm'];
+    const header = ['X:1',`T:${safeTitle}`,'M:4/4','L:1/16',`Q:1/4=${bpm}`,'%%staffsep 86','%%systemsep 30','%%leftmargin 0mm','%%rightmargin 0mm'];
     if (lyricSyllables.length) header.push('%%vocalspace 15pt');
     header.push('K:C');
 
@@ -955,9 +955,7 @@
     // staffwidth = usableWidth; ABCjs overhead (clef etc.) is handled via %%leftmargin/rightmargin 0mm in ABC header.
     const staffWidth = Math.max(200, usableWidth);
     // Adapt bars per line: narrower screens get fewer bars so notes stay readable.
-    const barsPerLine = usableWidth >= 480 ? 4 : 2;
-    const abc = abcText.replace(/%%barsperline \d+/, `%%barsperline ${barsPerLine}`);
-    ABCJS.renderAbc('sheet-music', abc, {
+    ABCJS.renderAbc('sheet-music', abcText, {
       staffwidth: staffWidth,
       oneSvgPerLine: true,
       print: true,
@@ -967,6 +965,7 @@
       lineThickness: 0.2,
       paddingtop: 0, paddingbottom: 0, paddingright: 0, paddingleft: 0,
       add_classes: true,
+      wrap: { minSpacing: 1.5, maxSpacing: 2.8, preferredMeasuresPerLine: 4 },
     });
     el.querySelectorAll('path, polygon').forEach(p => {
       if (p.getAttribute('fill') !== 'none') p.style.fill = '#1a1a1a';
